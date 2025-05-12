@@ -230,7 +230,6 @@ class Game:
             stacks[j].cards.extend(shuffled[i:k])
             i = k
 
-        stacks[0].cards = []
         self.pt()
 
     def pt(self):
