@@ -291,6 +291,7 @@ class Commands:
     TAB = 5
     ESC = 6
     SPACE = 7
+    UNDO = 8
 
 
 class Game:
@@ -299,12 +300,14 @@ class Game:
     cursor: tuple[int, int]
     pop_card: Card | None
     pop_index: int
+    history: list[tuple[int, int]]
 
     def __init__(self):
         self.__restart()
 
     def pt(self):
         os.system("clear")
+        print()
         print(self.header)
         print(self.table)
         print()
@@ -324,6 +327,8 @@ class Game:
             self.__handle_arrow(event)
         elif event == Commands.SPACE:
             self.__handle_space()
+        elif event == Commands.UNDO:
+            self.__handle_undo()
 
     def __restart(self):
         suits = [Spades, Hearts, Clubs, Diamonds]
@@ -335,6 +340,7 @@ class Game:
         self.cursor = -1, -1
         self.pop_card = None
         self.pop_index = -1
+        self.history = []
 
         i = 0
         for j in range(8):
@@ -362,6 +368,7 @@ class Game:
                 if not stacks[cursor].push(pop_card):
                     return
                 stacks[pop_index].pop()
+                self.history.append((pop_index, cursor))
             stacks[pop_index].trigger = False
             self.pop_card = None
             self.pop_index = -1
@@ -434,14 +441,35 @@ class Game:
     def __handle_space(self):
         if self.pop_card:
             return
-        for stack in self.table.stacks + self.header.B:
-            card = stack.peek()
+        for i, b in enumerate(self.table.stacks):
+            card = b.peek()
             if card:
-                for a in self.header.A:
+                for j, a in enumerate(self.header.A):
                     if a.push(card):
-                        stack.pop()
+                        b.pop()
+                        self.history.append((i, j + 8))
                         self.pt()
                         return
+        for i, b in enumerate(self.header.B):
+            card = b.peek()
+            if card:
+                for j, a in enumerate(self.header.A):
+                    if a.push(card):
+                        b.pop()
+                        self.history.append((i + 12, j + 8))
+                        self.pt()
+                        return
+
+    def __handle_undo(self):
+        if self.pop_card:
+            return
+        if not self.history:
+            return
+        f, t = self.history.pop()
+        stacks = self.__get_stacks()
+        card = stacks[t].pop()
+        stacks[f].append(card)
+        self.pt()
 
 
 game = Game()
@@ -452,6 +480,7 @@ key_map = {
     125: Commands.ARROW_DOWN,
     126: Commands.ARROW_UP,
     15: Commands.RESET,
+    32: Commands.UNDO,
     48: Commands.TAB,
     49: Commands.SPACE,
     53: Commands.ESC,
