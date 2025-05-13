@@ -1,5 +1,6 @@
 import os
 import random
+import shutil
 from abc import abstractmethod, ABC
 
 import keyboard
@@ -8,13 +9,14 @@ from keyboard import KeyboardEvent
 
 init()
 
-banner = """                                                                                                 
+author = "zhengyun"
+banner = f"""                                                                                                 
       _______ .______       _______  _______   ______  _______  __       __           __  _      
      |   ____||   _  \     |   ____||   ____| /      ||   ____||  |     |  |         /  \/ |     
      |  |__   |  |_)  |    |  |__   |  |__   |  ,----'|  |__   |  |     |  |        |_/\__/      
      |   __|  |      /     |   __|  |   __|  |  |     |   __|  |  |     |  |                     
-     |  |     |  |\  \----.|  |____ |  |____ |  `----.|  |____ |  `----.|  `----.                
-     |__|     | _| `._____||_______||_______| \______||_______||_______||_______|                
+     |  |     |  |\  \----.|  |____ |  |____ |  `----.|  |____ |  `----.|  `----.    By:         
+     |__|     | _| `._____||_______||_______| \______||_______||_______||_______|     {author[:8]}   
                                                                                                  
                                                                                                  
             [ ↑ ↓ ← → ]: Move Cursor     [ n ]: New Game        [ u ]: Undo                      
@@ -230,7 +232,7 @@ class Header:
         m = max([len(stack) for stack in stacks] + [5])
         for stack in stacks:
             for _ in range(m - len(stack)):
-                stack.append("         ")
+                stack.append(" " * 9)
 
         lines = []
         for i in range(m):
@@ -256,7 +258,7 @@ class Table:
         m = max([len(stack) for stack in stacks] + [23])
         for stack in stacks:
             for _ in range(m - len(stack)):
-                stack.append("         ")
+                stack.append(" " * 9)
 
         lines = []
         for i in range(m):
@@ -296,29 +298,44 @@ class Game:
     def __init__(self):
         self.__restart()
 
+    def __str__(self):
+        b = "\n".join([edge_col(line) for line in banner.splitlines()])
+        h = str(self.header)
+        t = str(self.table)
+        h_title = " ┌───────────────── Foundation ────────────────┐ ┌─────────────────── Buffer ──────────────────┐ "
+        t_title = " ┌────────────────────────────────────────── Tableau ──────────────────────────────────────────┐ "
+
+        body = f"""{b}
+{edge_col(h_title)}
+{h}
+{" " * 97}
+{" " * 97}
+{edge_col(t_title)}
+{t}
+{" " * 97}"""
+
+        up_edge = "┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+        down_edge = "└─────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+        lines = [
+            edge_col(up_edge),
+            *[f"{edge_col('│  ')}{line}{edge_col('  │')}" for line in body.splitlines()],
+            edge_col(down_edge),
+        ]
+        return "\n".join(lines)
+
+    def __repr__(self):
+        return self.__str__()
+
     def pt(self):
         os.system("clear")
+
+        size = shutil.get_terminal_size(fallback=(103, 24))
+        columns = size.columns
+        bias = (columns - 103) // 2
         print()
-        print(edge_col(
-            "┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐"))
-        lines = []
-        lines.extend([edge_col(line) for line in banner.splitlines()])
-        lines.append(edge_col(
-            " ┌───────────────── Foundation ────────────────┐ ┌─────────────────── Buffer ──────────────────┐ "))
-        lines.extend(str(self.header).splitlines())
-        lines.append(
-            "                                                                                                 ")
-        lines.append(
-            "                                                                                                 ")
-        lines.append(edge_col(
-            " ┌────────────────────────────────────────── Tableau ──────────────────────────────────────────┐ "))
-        lines.extend(str(self.table).splitlines())
-        lines.append(
-            "                                                                                                 ")
-        lines = [f"{edge_col('│  ')}{line}{edge_col('  │')}" for line in lines]
-        print("\n".join(lines))
-        print(edge_col(
-            "└─────────────────────────────────────────────────────────────────────────────────────────────────────┘"))
+        print()
+        print()
+        print("\n".join([f"{' ' * bias}{line}" for line in str(self).splitlines()]))
         print()
 
     def pe(self, content):
