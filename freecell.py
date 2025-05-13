@@ -282,36 +282,26 @@ class Table:
         return self.__str__()
 
 
+class Commands:
+    ARROW_UP = 0
+    ARROW_DOWN = 1
+    ARROW_LEFT = 2
+    ARROW_RIGHT = 3
+    RESET = 4
+    TAB = 5
+    ESC = 6
+    SPACE = 7
+
+
 class Game:
     header: Header
     table: Table
-    cursor: int
-    trigger: int
+    cursor: tuple[int, int]
     pop_card: Card | None
     pop_index: int
 
     def __init__(self):
-        self.restart()
-
-    def restart(self):
-        suits = [Spades, Hearts, Clubs, Diamonds]
-        cards = [Card(suit, i + 1) for i in range(13) for suit in suits]
-        shuffled = random.sample(cards, len(cards))
-
-        self.header = Header([AStack(suit) for suit in suits], [BStack() for _ in range(4)])
-        self.table = Table([TableStack() for _ in range(8)])
-        self.cursor = -1
-        self.trigger = -1
-        self.pop_card = None
-        self.pop_index = -1
-
-        i = 0
-        for j in range(8):
-            k = i + j + 3
-            self.table.stacks[j].cards.extend(shuffled[i:k])
-            i = k
-
-        self.pt()
+        self.__restart()
 
     def pt(self):
         os.system("clear")
@@ -324,18 +314,50 @@ class Game:
         print()
 
     def on(self, event):
-        table = self.table
-        header = self.header
-        trigger = self.trigger
-        cursor = self.cursor
+        if event == Commands.RESET:
+            self.__restart()
+        elif event == Commands.TAB:
+            self.__handle_tab()
+        elif event == Commands.ESC:
+            self.__handle_esc()
+        elif event in {Commands.ARROW_UP, Commands.ARROW_DOWN, Commands.ARROW_LEFT, Commands.ARROW_RIGHT}:
+            self.__handle_arrow(event)
+        elif event == Commands.SPACE:
+            self.__handle_space()
+
+    def __restart(self):
+        suits = [Spades, Hearts, Clubs, Diamonds]
+        cards = [Card(suit, i + 1) for i in range(13) for suit in suits]
+        shuffled = random.sample(cards, len(cards))
+
+        self.header = Header([AStack(suit) for suit in suits], [BStack() for _ in range(4)])
+        self.table = Table([TableStack() for _ in range(8)])
+        self.cursor = -1, -1
+        self.pop_card = None
+        self.pop_index = -1
+
+        i = 0
+        for j in range(8):
+            k = i + j + 3
+            self.table.stacks[j].cards.extend(shuffled[i:k])
+            i = k
+
+        self.pt()
+
+    def __get_stacks(self):
+        return self.table.stacks + self.header.A + self.header.B
+
+    def __handle_tab(self):
+        x, y = self.cursor
+        if x < 0 or y < 0:
+            return
+
+        cursor = y * 8 + x
         pop_card = self.pop_card
         pop_index = self.pop_index
-        stacks = table.stacks + header.A + header.B
-        if event == 'w':
-            if not pop_card:
-                return
-            if cursor < 0:
-                return
+        stacks = self.__get_stacks()
+
+        if pop_card:
             if pop_index != cursor:
                 if not stacks[cursor].push(pop_card):
                     return
@@ -345,71 +367,104 @@ class Game:
             self.pop_index = -1
             for stack in stacks:
                 stack.mode = False
-        elif event == 's':
-            if cursor < 0:
-                return
-            if pop_card:
-                if pop_index == cursor:
-                    return
+        else:
             pop_card = stacks[cursor].peek()
             if not pop_card:
                 return
-
             stacks[pop_index].trigger = False
             self.pop_card = pop_card
             self.pop_index = cursor
             stacks[cursor].trigger = True
             for stack in stacks:
                 stack.mode = True
-        elif event == 'a' or event == 'd':
-            if 0 <= cursor <= 15:
-                stacks[cursor].focus = False
-            d = -1 if event == 'a' else 1
-            if cursor >= 8:
-                cursor += d
-                if cursor < 8:
-                    cursor = 15
-                if cursor >= 16:
-                    cursor = 8
-            else:
-                cursor += d
-                if cursor < 0:
-                    cursor = 7
-                if cursor >= 8:
-                    cursor = 0
-            stacks[cursor].focus = True
-        elif event == 't':
-            if cursor < 0:
-                return
-            stacks[cursor].focus = False
-            if cursor <= 7:
-                cursor += 8
-            else:
-                cursor -= 8
-            stacks[cursor].focus = True
-        self.trigger = trigger
-        self.cursor = cursor
+
         self.pt()
+
+    def __handle_esc(self):
+        pop_card = self.pop_card
+        pop_index = self.pop_index
+        stacks = self.__get_stacks()
+
+        if not pop_card:
+            return
+        stacks[pop_index].trigger = False
+        self.pop_card = None
+        self.pop_index = -1
+        for stack in stacks:
+            stack.mode = False
+
+        self.pt()
+
+    def __handle_arrow(self, event):
+        x, y = self.cursor
+        stacks = self.__get_stacks()
+        if x >= 0 and y >= 0:
+            stacks[y * 8 + x].focus = False
+            if event == Commands.ARROW_LEFT:
+                x -= 1
+            elif event == Commands.ARROW_RIGHT:
+                x += 1
+            elif event == Commands.ARROW_UP:
+                y += 1
+            else:
+                y -= 1
+            if x < 0:
+                x = 7
+            elif x > 7:
+                x = 0
+            if y < 0:
+                y = 1
+            elif y > 1:
+                y = 0
+        else:
+            if event == Commands.ARROW_LEFT:
+                x, y = 7, 0
+            elif event == Commands.ARROW_RIGHT:
+                x, y = 0, 0
+            elif event == Commands.ARROW_UP:
+                x, y = 0, 0
+            else:
+                x, y = 0, 1
+
+        stacks[y * 8 + x].focus = True
+        self.cursor = x, y
+
+        self.pt()
+
+    def __handle_space(self):
+        if self.pop_card:
+            return
+        for stack in self.table.stacks + self.header.B:
+            card = stack.peek()
+            if card:
+                for a in self.header.A:
+                    if a.push(card):
+                        stack.pop()
+                        self.pt()
+                        return
 
 
 game = Game()
 
+key_map = {
+    123: Commands.ARROW_LEFT,
+    124: Commands.ARROW_RIGHT,
+    125: Commands.ARROW_DOWN,
+    126: Commands.ARROW_UP,
+    15: Commands.RESET,
+    48: Commands.TAB,
+    49: Commands.SPACE,
+    53: Commands.ESC,
+}
+
 
 def on_press(event: KeyboardEvent):
     code = event.scan_code
-    if 123 <= code <= 126:
-        code = ['a', 'd', 's', 'w'][code - 123]
-        game.on(code)
-    elif code == 15:
-        game.restart()
-    elif code == 48:
-        game.on('t')
-    else:
-        print(code)
+    if code in key_map:
+        game.on(key_map.get(code))
 
 
-# 监听所有按键
 keyboard.on_press(on_press)
 
-# 阻塞主线程，直到按下 esc 键
-keyboard.wait(7)
+while True:
+    pass
