@@ -26,11 +26,10 @@ Diamonds = Suit('♦', Fore.RED, 1)  # 方块 - 红色
 
 
 class Card:
-    def __init__(self, suit: Suit, rank, h=0, b=0):
+    def __init__(self, suit: Suit, rank, h=0):
         self.suit = suit
         self.rank = rank
         self.h = h
-        self.b = b
 
     def __str__(self):
         rank = self.rank
@@ -47,37 +46,19 @@ class Card:
         else:
             rank = ' '
 
-        symbol = ' '
-        if self.suit:
-            symbol = self.suit.symbol
+        symbol = self.suit.symbol if self.suit else ' '
 
-        if self.b:
-            lines = [
-                f"┏━━━━━━━┓",
-                f"┃ {rank:<4}{symbol} ┃",
-                f"┃   {symbol}   ┃",
-                f"┃ {symbol}{rank:>4} ┃",
-                f"┗━━━━━━━┛"
-            ]
-        else:
-            lines = [
-                f"┌───────┐",
-                f"│ {rank:<4}{symbol} │",
-                f"│   {symbol}   │",
-                f"│ {symbol}{rank:>4} │",
-                f"└───────┘"
-            ]
+        lines = [
+            f"┌───────┐",
+            f"│ {rank:<4}{symbol} │",
+            f"│   {symbol}   │",
+            f"│ {symbol}{rank:>4} │",
+            f"└───────┘"
+        ]
         if self.suit:
             color = self.suit.color
             lines = [f"{color}{line}{Fore.RESET}" for line in lines]
-        # else:
-        #     lines = [
-        #         *[f"\033[38;5;240m{lines[0]}\033[0m"],
-        #         *[
-        #             f"\033[38;5;240m{line[:2]}\033[0m\033[7m\033[38;5;240m{line[2:-2]}\033[0m\033[0m\033[38;5;240m{line[-2:]}\033[0m"
-        #             for line in lines[1:-1]],
-        #         *[f"\033[38;5;240m{lines[-1]}\033[0m"],
-        #     ]
+
         if self.h == 1:
             lines = [f"\033[7m{line}\033[0m" for line in lines]
         return "\n".join(lines)
