@@ -1,5 +1,6 @@
 import os
 import random
+from abc import abstractmethod, ABC
 
 import keyboard
 from colorama import init, Fore
@@ -22,7 +23,6 @@ Spades = Suit('♠', Fore.BLUE, 0)  # 黑桃 - 黑色
 Hearts = Suit('♥', Fore.RED, 1)  # 红心 - 红色
 Clubs = Suit('♣', Fore.BLUE, 0)  # 梅花 - 黑色
 Diamonds = Suit('♦', Fore.RED, 1)  # 方块 - 红色
-Suits = [Spades, Hearts, Clubs, Diamonds]
 
 
 class Card:
@@ -97,10 +97,9 @@ class EmptyCard(Card):
         return EmptyCard(1)
 
 
-class Stack:
+class Stack(ABC):
     def __init__(self, cards: list[Card]):
         self.cards = cards
-        self.s = 0
         self.focus = False
         self.trigger = False
         self.mode = False
@@ -131,20 +130,94 @@ class Stack:
 
         if self.focus:
             if self.mode:
+                cards = cards or [EmptyCard()]
                 cards += [EmptyCard().highlight()]
-            elif cards:
-                cards[-1] = cards[-1].highlight()
             else:
-                cards = [EmptyCard().highlight()]
+                if cards:
+                    cards[-1] = cards[-1].highlight()
+                else:
+                    cards = [EmptyCard().highlight()]
 
         r.extend(Stack.__print_cards(cards or [EmptyCard()]))
         if on_card:
-            r.append("         ")
             r.append(str(on_card))
         return "\n".join(r)
 
     def __repr__(self):
         return self.__str__()
+
+    def append(self, card: Card):
+        self.cards.append(card)
+
+    @abstractmethod
+    def peek(self) -> Card:
+        pass
+
+    @abstractmethod
+    def pop(self) -> Card:
+        pass
+
+    @abstractmethod
+    def push(self, card: Card) -> bool:
+        pass
+
+
+class TableStack(Stack):
+    def __init__(self):
+        super().__init__([])
+
+    def peek(self) -> Card:
+        return self.cards[-1] if self.cards else None
+
+    def pop(self) -> Card:
+        return self.cards.pop() if self.cards else None
+
+    def push(self, card: Card) -> bool:
+        if self.cards:
+            last = self.cards[-1]
+            if last.rank != card.rank + 1:
+                return False
+            if last.suit.cls == card.suit.cls:
+                return False
+        self.append(card)
+        return True
+
+
+class AStack(Stack):
+    def __init__(self, suit: Suit):
+        super().__init__([Card(suit, 0)])
+
+    def peek(self) -> Card:
+        return self.cards[-1] if len(self.cards) > 1 else None
+
+    def pop(self) -> Card:
+        return self.cards.pop() if len(self.cards) > 1 else None
+
+    def push(self, card: Card) -> bool:
+        last = self.cards[-1]
+        if last.rank != card.rank - 1:
+            return False
+        if last.suit != card.suit:
+            return False
+        self.cards.append(card)
+        return True
+
+
+class BStack(Stack):
+    def __init__(self):
+        super().__init__([EmptyCard()])
+
+    def peek(self) -> Card:
+        return self.cards[-1] if len(self.cards) > 1 else None
+
+    def pop(self) -> Card:
+        return self.cards.pop() if len(self.cards) > 1 else None
+
+    def push(self, card: Card) -> bool:
+        if len(self.cards) > 1:
+            return False
+        self.cards.append(card)
+        return True
 
 
 class Header:
@@ -158,9 +231,8 @@ class Header:
 
     def __str__(self):
         stacks = self.A + self.B
-        stacks = [Stack([stack.cards[-1]] if stack.cards else []) for stack in stacks]
         stacks = [str(stack).splitlines() for stack in stacks]
-        m = max([len(stack) for stack in stacks])
+        m = max([len(stack) for stack in stacks] + [5])
         for stack in stacks:
             for _ in range(m - len(stack)):
                 stack.append("         ")
@@ -181,9 +253,8 @@ class Header:
 
 
 class Table:
-    def __init__(self, stacks: list[Stack], min_h=0):
+    def __init__(self, stacks: list[Stack]):
         self.stacks = stacks
-        self.min_h = min_h
 
     @staticmethod
     def __col(text):
@@ -191,7 +262,7 @@ class Table:
 
     def __str__(self):
         stacks = [str(stack).splitlines() for stack in self.stacks]
-        m = max([len(stack) for stack in stacks] + [self.min_h])
+        m = max([len(stack) for stack in stacks] + [23])
         for stack in stacks:
             for _ in range(m - len(stack)):
                 stack.append("         ")
@@ -214,20 +285,30 @@ class Table:
 class Game:
     header: Header
     table: Table
-    cursor: int = -1
-    trigger: int = -1
+    cursor: int
+    trigger: int
+    pop_card: Card | None
+    pop_index: int
 
     def __init__(self):
-        all_cards = [Card(suit, i + 1) for i in range(13) for suit in Suits]
-        shuffled = random.sample(all_cards, len(all_cards))
-        stacks = [Stack([]) for _ in range(8)]
-        self.header = Header([Stack([Card(suit, 0)]) for suit in Suits], [Stack([]) for _ in range(4)])
-        self.table = Table(stacks, 25)
+        self.restart()
+
+    def restart(self):
+        suits = [Spades, Hearts, Clubs, Diamonds]
+        cards = [Card(suit, i + 1) for i in range(13) for suit in suits]
+        shuffled = random.sample(cards, len(cards))
+
+        self.header = Header([AStack(suit) for suit in suits], [BStack() for _ in range(4)])
+        self.table = Table([TableStack() for _ in range(8)])
+        self.cursor = -1
+        self.trigger = -1
+        self.pop_card = None
+        self.pop_index = -1
 
         i = 0
         for j in range(8):
             k = i + j + 3
-            stacks[j].cards.extend(shuffled[i:k])
+            self.table.stacks[j].cards.extend(shuffled[i:k])
             i = k
 
         self.pt()
@@ -247,76 +328,68 @@ class Game:
         header = self.header
         trigger = self.trigger
         cursor = self.cursor
-
+        pop_card = self.pop_card
+        pop_index = self.pop_index
+        stacks = table.stacks + header.A + header.B
         if event == 'w':
-            if trigger < 0 or cursor < 0:
+            if not pop_card:
                 return
-            if trigger != cursor:
-                s1 = table.stacks[trigger]
-                s2 = table.stacks[cursor]
-                if not self.__stack_to_stack(s1, s2):
+            if cursor < 0:
+                return
+            if pop_index != cursor:
+                if not stacks[cursor].push(pop_card):
                     return
-                s2.cards.append(s1.cards.pop())
-            if trigger >= 0:
-                table.stacks[trigger].trigger = False
-            self.__change_mode(False)
+                stacks[pop_index].pop()
+            stacks[pop_index].trigger = False
+            self.pop_card = None
+            self.pop_index = -1
+            for stack in stacks:
+                stack.mode = False
         elif event == 's':
             if cursor < 0:
                 return
-            if len(table.stacks[cursor].cards) == 0:
+            if pop_card:
+                if pop_index == cursor:
+                    return
+            pop_card = stacks[cursor].peek()
+            if not pop_card:
                 return
-            self.__change_mode(True)
-            if trigger >= 0:
-                table.stacks[trigger].trigger = False
-            if cursor >= 0:
-                trigger = cursor
-                table.stacks[trigger].trigger = True
+
+            stacks[pop_index].trigger = False
+            self.pop_card = pop_card
+            self.pop_index = cursor
+            stacks[cursor].trigger = True
+            for stack in stacks:
+                stack.mode = True
         elif event == 'a' or event == 'd':
+            if 0 <= cursor <= 15:
+                stacks[cursor].focus = False
             d = -1 if event == 'a' else 1
-            if cursor >= 0:
-                table.stacks[cursor].focus = False
-            cursor += d
+            if cursor >= 8:
+                cursor += d
+                if cursor < 8:
+                    cursor = 15
+                if cursor >= 16:
+                    cursor = 8
+            else:
+                cursor += d
+                if cursor < 0:
+                    cursor = 7
+                if cursor >= 8:
+                    cursor = 0
+            stacks[cursor].focus = True
+        elif event == 't':
             if cursor < 0:
-                cursor = len(table.stacks) - 1
-            if cursor >= len(table.stacks):
-                cursor = 0
-            table.stacks[cursor].focus = True
-        elif 1 <= event <= 4:
-            pass
-        elif 5 <= event <= 8:
-            pass
+                return
+            stacks[cursor].focus = False
+            if cursor <= 7:
+                cursor += 8
+            else:
+                cursor -= 8
+            stacks[cursor].focus = True
         self.trigger = trigger
         self.cursor = cursor
         self.pt()
-
-    def __change_mode(self, mode):
-        for stack in self.table.stacks:
-            stack.mode = mode
-        for stack in self.header.A:
-            stack.mode = mode
-        for stack in self.header.B:
-            stack.mode = mode
-
-    @staticmethod
-    def __stack_to_stack(s1, s2):
-        if s2.cards:
-            c1 = s1.cards[-1]
-            c2 = s2.cards[-1]
-            if c1.rank != c2.rank - 1:
-                return False
-            if c1.suit.cls == c2.suit.cls:
-                return False
-        return True
-
-    @staticmethod
-    def __stack_to_A(s, a):
-        c1 = s.cards[-1]
-        c2 = a.cards[-1]
-        if c1.rank != c2.rank - 1:
-            return False
-        if c1.suit.cls != c2.suit.cls:
-            return False
-        return True
 
 
 game = Game()
@@ -327,6 +400,12 @@ def on_press(event: KeyboardEvent):
     if 123 <= code <= 126:
         code = ['a', 'd', 's', 'w'][code - 123]
         game.on(code)
+    elif code == 15:
+        game.restart()
+    elif code == 48:
+        game.on('t')
+    else:
+        print(code)
 
 
 # 监听所有按键
