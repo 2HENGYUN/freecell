@@ -3,9 +3,9 @@ import random
 import shutil
 from abc import abstractmethod, ABC
 
-import keyboard
 from colorama import init, Fore
-from keyboard import KeyboardEvent
+from pynput import keyboard
+from pynput.keyboard import Key, KeyCode
 
 init()
 
@@ -513,13 +513,16 @@ key_map = {
 }
 
 
-def on_press(event: KeyboardEvent):
-    code = event.scan_code
+def on_press(key):
+    code = 0
+    if isinstance(key, Key):
+        code = key.value.vk
+    elif isinstance(key, KeyCode):
+        code = key.vk
+
     if code in key_map:
         game.on(key_map.get(code))
 
 
-keyboard.on_press(on_press)
-
-while True:
-    pass
+with keyboard.Listener(on_press=on_press) as listener:
+    listener.join()
