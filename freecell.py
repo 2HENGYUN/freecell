@@ -205,16 +205,16 @@ class AStack(Stack):
 
 class BStack(Stack):
     def __init__(self):
-        super().__init__([EmptyCard()])
+        super().__init__([])
 
     def peek(self) -> Card:
-        return self.cards[-1] if len(self.cards) > 1 else None
+        return self.cards[-1] if self.cards else None
 
     def pop(self) -> Card:
-        return self.cards.pop() if len(self.cards) > 1 else None
+        return self.cards.pop() if self.cards else None
 
     def push(self, card: Card) -> bool:
-        if len(self.cards) > 1:
+        if self.cards:
             return False
         self.cards.append(card)
         return True
