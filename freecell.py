@@ -8,6 +8,20 @@ from keyboard import KeyboardEvent
 
 init()
 
+banner = """                                                                                                 
+      _______ .______       _______  _______   ______  _______  __       __           __  _      
+     |   ____||   _  \     |   ____||   ____| /      ||   ____||  |     |  |         /  \/ |     
+     |  |__   |  |_)  |    |  |__   |  |__   |  ,----'|  |__   |  |     |  |        |_/\__/      
+     |   __|  |      /     |   __|  |   __|  |  |     |   __|  |  |     |  |                     
+     |  |     |  |\  \----.|  |____ |  |____ |  `----.|  |____ |  `----.|  `----.                
+     |__|     | _| `._____||_______||_______| \______||_______||_______||_______|                
+                                                                                                 
+                                                                                                 
+            [ ↑ ↓ ← → ]: Move Cursor     [ n ]: New Game        [ u ]: Undo                      
+            [ Tab ]: Grab / Place Card   [ Esc ]: Cancel Grab   [ Space ]: Auto Sort             
+                                                                                                 
+                                                                                                 """
+
 
 class Suit:
     def __init__(self, symbol, color, cls):
@@ -201,14 +215,14 @@ class BStack(Stack):
         return True
 
 
+def edge_col(text):
+    return f"\033[38;5;240m{text}\033[0m"
+
+
 class Header:
     def __init__(self, A: list[Stack], B: list[Stack]):
         self.A = A
         self.B = B
-
-    @staticmethod
-    def __col(text):
-        return f"\033[38;5;240m{text}\033[0m"
 
     def __str__(self):
         stacks = self.A + self.B
@@ -220,13 +234,13 @@ class Header:
 
         lines = []
         for i in range(m):
-            lines.append(Header.__col(" │ ").join([stack[i] for stack in stacks]))
+            lines.append(edge_col(" │ ").join([stack[i] for stack in stacks]))
 
         up_edge = "┌" + "┬".join(["───────────" for _ in stacks]) + "┐"
         down_edge = "└" + "┴".join(["───────────" for _ in stacks]) + "┘"
 
-        lines = [Header.__col("│ ") + line + Header.__col(" │") for line in lines]
-        lines = [Header.__col(up_edge)] + lines + [Header.__col(down_edge)]
+        lines = [edge_col("│ ") + line + edge_col(" │") for line in lines]
+        lines = [edge_col(up_edge)] + lines + [edge_col(down_edge)]
         return "\n".join(lines)
 
     def __repr__(self):
@@ -237,10 +251,6 @@ class Table:
     def __init__(self, stacks: list[Stack]):
         self.stacks = stacks
 
-    @staticmethod
-    def __col(text):
-        return f"\033[38;5;240m{text}\033[0m{Fore.RESET}"
-
     def __str__(self):
         stacks = [str(stack).splitlines() for stack in self.stacks]
         m = max([len(stack) for stack in stacks] + [23])
@@ -250,13 +260,13 @@ class Table:
 
         lines = []
         for i in range(m):
-            lines.append(Table.__col(" │ ").join([stack[i] for stack in stacks]))
+            lines.append(edge_col(" │ ").join([stack[i] for stack in stacks]))
 
         up_edge = "┌" + "┬".join(["───────────" for _ in stacks]) + "┐"
         down_edge = "└" + "┴".join(["───────────" for _ in stacks]) + "┘"
 
-        lines = [Table.__col("│ ") + line + Table.__col(" │") for line in lines]
-        lines = [Table.__col(up_edge)] + lines + [Table.__col(down_edge)]
+        lines = [edge_col("│ ") + line + edge_col(" │") for line in lines]
+        lines = [edge_col(up_edge)] + lines + [edge_col(down_edge)]
         return "\n".join(lines)
 
     def __repr__(self):
@@ -289,8 +299,26 @@ class Game:
     def pt(self):
         os.system("clear")
         print()
-        print(self.header)
-        print(self.table)
+        print(edge_col(
+            "┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐"))
+        lines = []
+        lines.extend([edge_col(line) for line in banner.splitlines()])
+        lines.append(edge_col(
+            " ┌───────────────── Foundation ────────────────┐ ┌─────────────────── Buffer ──────────────────┐ "))
+        lines.extend(str(self.header).splitlines())
+        lines.append(
+            "                                                                                                 ")
+        lines.append(
+            "                                                                                                 ")
+        lines.append(edge_col(
+            " ┌────────────────────────────────────────── Tableau ──────────────────────────────────────────┐ "))
+        lines.extend(str(self.table).splitlines())
+        lines.append(
+            "                                                                                                 ")
+        lines = [f"{edge_col('│  ')}{line}{edge_col('  │')}" for line in lines]
+        print("\n".join(lines))
+        print(edge_col(
+            "└─────────────────────────────────────────────────────────────────────────────────────────────────────┘"))
         print()
 
     def pe(self, content):
@@ -460,7 +488,7 @@ key_map = {
     124: Commands.ARROW_RIGHT,
     125: Commands.ARROW_DOWN,
     126: Commands.ARROW_UP,
-    15: Commands.RESET,
+    45: Commands.RESET,
     32: Commands.UNDO,
     48: Commands.TAB,
     49: Commands.SPACE,
