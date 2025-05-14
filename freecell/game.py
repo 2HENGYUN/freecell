@@ -1,11 +1,13 @@
 import os
 import random
 import shutil
+import time
 from abc import abstractmethod, ABC
 
-from colorama import init, Fore
-from pynput import keyboard
-from pynput.keyboard import Key, KeyCode
+from colorama import init
+
+from animation import CongratulationAnimation
+from common import Card, Suit, Spades, Hearts, Clubs, Diamonds, edge_col
 
 init()
 
@@ -23,67 +25,6 @@ banner = f"""
             [ Tab ]: Grab / Place Card   [ Esc ]: Cancel Grab   [ Space ]: Auto Sort             
                                                                                                  
                                                                                                  """
-
-
-class Suit:
-    def __init__(self, symbol, color, cls):
-        self.symbol = symbol
-        self.color = color
-        self.cls = cls
-
-    def __str__(self):
-        return f"{self.color}{self.symbol}{Fore.RESET}"
-
-
-Spades = Suit('♠', Fore.BLUE, 0)  # 黑桃 - 黑色
-Hearts = Suit('♥', Fore.RED, 1)  # 红心 - 红色
-Clubs = Suit('♣', Fore.BLUE, 0)  # 梅花 - 黑色
-Diamonds = Suit('♦', Fore.RED, 1)  # 方块 - 红色
-
-
-class Card:
-    def __init__(self, suit: Suit, rank, h=0):
-        self.suit = suit
-        self.rank = rank
-        self.h = h
-
-    def __str__(self):
-        rank = self.rank
-        if rank == 1:
-            rank = 'A'
-        elif rank == 11:
-            rank = 'J'
-        elif rank == 12:
-            rank = 'Q'
-        elif rank == 13:
-            rank = 'K'
-        elif 2 <= rank <= 10:
-            rank = f'{rank}'
-        else:
-            rank = ' '
-
-        symbol = self.suit.symbol if self.suit else ' '
-
-        lines = [
-            f"┌───────┐",
-            f"│ {rank:<4}{symbol} │",
-            f"│   {symbol}   │",
-            f"│ {symbol}{rank:>4} │",
-            f"└───────┘"
-        ]
-        if self.suit:
-            color = self.suit.color
-            lines = [f"{color}{line}{Fore.RESET}" for line in lines]
-
-        if self.h == 1:
-            lines = [f"\033[7m{line}\033[0m" for line in lines]
-        return "\n".join(lines)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def highlight(self):
-        return Card(self.suit, self.rank, 1)
 
 
 class EmptyCard(Card):
@@ -243,10 +184,6 @@ class BStack(Stack):
         return True
 
 
-def edge_col(text):
-    return f"\033[38;5;240m{text}\033[0m"
-
-
 class Header:
     def __init__(self, A: list[Stack], B: list[Stack]):
         self.A = A
@@ -313,6 +250,40 @@ class Commands:
     UNDO = 8
 
 
+def print_to_screen(lines):
+    lines = [edge_col(line) for line in banner.splitlines()] + lines
+    up_edge = "┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+    down_edge = "└─────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+    lines = [
+        edge_col(up_edge),
+        *[f"{edge_col('│  ')}{line}{edge_col('  │')}" for line in lines],
+        edge_col(down_edge),
+    ]
+
+    os.system("clear")
+
+    size = shutil.get_terminal_size(fallback=(103, 24))
+    columns = size.columns
+    bias = (columns - 103) // 2
+    print()
+    print()
+    print()
+    print("\n".join([f"{' ' * bias}{line}" for line in lines]))
+    print()
+
+
+def congrats():
+    an = CongratulationAnimation()
+    for t in range(len(an.timeline)):
+        lines = [
+            *[" " * 97] * 2,
+            *an.get_frame(t),
+        ]
+
+        print_to_screen(lines)
+        time.sleep(0.05)
+
+
 class Game:
     header: Header
     table: Table
@@ -320,19 +291,18 @@ class Game:
     pop_card: Card | None
     pop_index: int
     history: list[tuple[int, int]]
+    done: bool
 
     def __init__(self):
         self.__restart()
 
     def __str__(self):
-        b = "\n".join([edge_col(line) for line in banner.splitlines()])
         h = str(self.header)
         t = str(self.table)
         h_title = " ┌───────────────── Foundation ────────────────┐ ┌─────────────────── Buffer ──────────────────┐ "
         t_title = " ┌────────────────────────────────────────── Tableau ──────────────────────────────────────────┐ "
 
-        body = f"""{b}
-{edge_col(h_title)}
+        return f"""{edge_col(h_title)}
 {h}
 {" " * 97}
 {" " * 97}
@@ -340,47 +310,33 @@ class Game:
 {t}
 {" " * 97}"""
 
-        up_edge = "┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-        down_edge = "└─────────────────────────────────────────────────────────────────────────────────────────────────────┘"
-        lines = [
-            edge_col(up_edge),
-            *[f"{edge_col('│  ')}{line}{edge_col('  │')}" for line in body.splitlines()],
-            edge_col(down_edge),
-        ]
-        return "\n".join(lines)
-
     def __repr__(self):
         return self.__str__()
 
-    def pt(self):
-        os.system("clear")
-
-        size = shutil.get_terminal_size(fallback=(103, 24))
-        columns = size.columns
-        bias = (columns - 103) // 2
-        print()
-        print()
-        print()
-        print("\n".join([f"{' ' * bias}{line}" for line in str(self).splitlines()]))
-        print()
-
-    def pe(self, content):
-        print("-----------> Error: " + content)
-        print()
+    def refresh(self):
+        print_to_screen(str(self).splitlines())
+        r = min([len(a.cards) for a in self.header.A])
+        if r == 14:
+            self.done = True
+            congrats()
 
     def on(self, event):
-        if event == Commands.RESET:
-            self.__restart()
-        elif event == Commands.TAB:
-            self.__handle_tab()
-        elif event == Commands.ESC:
-            self.__handle_esc()
-        elif event in {Commands.ARROW_UP, Commands.ARROW_DOWN, Commands.ARROW_LEFT, Commands.ARROW_RIGHT}:
-            self.__handle_arrow(event)
-        elif event == Commands.SPACE:
-            self.__handle_space()
-        elif event == Commands.UNDO:
-            self.__handle_undo()
+        if self.done:
+            if event == Commands.RESET:
+                self.__restart()
+        else:
+            if event == Commands.RESET:
+                self.__restart()
+            elif event == Commands.TAB:
+                self.__handle_tab()
+            elif event == Commands.ESC:
+                self.__handle_esc()
+            elif event in {Commands.ARROW_UP, Commands.ARROW_DOWN, Commands.ARROW_LEFT, Commands.ARROW_RIGHT}:
+                self.__handle_arrow(event)
+            elif event == Commands.SPACE:
+                self.__handle_space()
+            elif event == Commands.UNDO:
+                self.__handle_undo()
 
     def __restart(self):
         suits = [Spades, Hearts, Clubs, Diamonds]
@@ -393,6 +349,7 @@ class Game:
         self.pop_card = None
         self.pop_index = -1
         self.history = []
+        self.done = False
 
         i = 0
         for j in range(8):
@@ -400,7 +357,7 @@ class Game:
             self.table.stacks[j].cards.extend(shuffled[i:k])
             i = k
 
-        self.pt()
+        self.refresh()
 
     def __get_stacks(self):
         return self.table.stacks + self.header.A + self.header.B
@@ -437,7 +394,7 @@ class Game:
             for stack in stacks:
                 stack.mode = True
 
-        self.pt()
+        self.refresh()
 
     def __handle_esc(self):
         pop_card = self.pop_card
@@ -452,7 +409,7 @@ class Game:
         for stack in stacks:
             stack.mode = False
 
-        self.pt()
+        self.refresh()
 
     def __handle_arrow(self, event):
         x, y = self.cursor
@@ -488,7 +445,7 @@ class Game:
         stacks[y * 8 + x].focus = True
         self.cursor = x, y
 
-        self.pt()
+        self.refresh()
 
     def __handle_space(self):
         if self.pop_card:
@@ -500,7 +457,7 @@ class Game:
                     if a.push(card):
                         b.pop()
                         self.history.append((i, j + 8))
-                        self.pt()
+                        self.refresh()
                         return
         for i, b in enumerate(self.header.B):
             card = b.peek()
@@ -509,7 +466,7 @@ class Game:
                     if a.push(card):
                         b.pop()
                         self.history.append((i + 12, j + 8))
-                        self.pt()
+                        self.refresh()
                         return
 
     def __handle_undo(self):
@@ -521,34 +478,4 @@ class Game:
         stacks = self.__get_stacks()
         card = stacks[t].pop()
         stacks[f].append(card)
-        self.pt()
-
-
-game = Game()
-
-key_map = {
-    123: Commands.ARROW_LEFT,
-    124: Commands.ARROW_RIGHT,
-    125: Commands.ARROW_DOWN,
-    126: Commands.ARROW_UP,
-    45: Commands.RESET,
-    32: Commands.UNDO,
-    48: Commands.TAB,
-    49: Commands.SPACE,
-    53: Commands.ESC,
-}
-
-
-def on_press(key):
-    code = 0
-    if isinstance(key, Key):
-        code = key.value.vk
-    elif isinstance(key, KeyCode):
-        code = key.vk
-
-    if code in key_map:
-        game.on(key_map.get(code))
-
-
-with keyboard.Listener(on_press=on_press) as listener:
-    listener.join()
+        self.refresh()
