@@ -94,26 +94,26 @@ class EmptyCard(Card):
         return EmptyCard(1)
 
 
+def print_cards(cards):
+    r = []
+    cards = cards or [EmptyCard()]
+    for i, card in enumerate(cards):
+        if i == len(cards) - 1:
+            r.append(str(card))
+        else:
+            lines = str(card).splitlines()
+            for line in lines[:2]:
+                r.append(line)
+
+    return r
+
+
 class Stack(ABC):
     def __init__(self, cards: list[Card]):
         self.cards = cards
         self.focus = False
         self.trigger = False
         self.mode = False
-
-    @staticmethod
-    def __print_cards(cards):
-        r = []
-        cards = cards or [EmptyCard()]
-        for i, card in enumerate(cards):
-            if i == len(cards) - 1:
-                r.append(str(card))
-            else:
-                lines = str(card).splitlines()
-                for line in lines[:2]:
-                    r.append(line)
-
-        return r
 
     def __str__(self):
         cards = self.cards.copy()
@@ -135,7 +135,7 @@ class Stack(ABC):
                 else:
                     cards = [EmptyCard().highlight()]
 
-        r.extend(Stack.__print_cards(cards or [EmptyCard()]))
+        r.extend(print_cards(cards or [EmptyCard()]))
         if on_card:
             r.append(str(on_card))
         return "\n".join(r)
@@ -182,7 +182,8 @@ class TableStack(Stack):
 
 class AStack(Stack):
     def __init__(self, suit: Suit):
-        super().__init__([Card(suit, 0)])
+        self.dummy = Card(suit, 0)
+        super().__init__([self.dummy])
 
     def peek(self) -> Card:
         return self.cards[-1] if len(self.cards) > 1 else None
@@ -198,6 +199,31 @@ class AStack(Stack):
             return False
         self.cards.append(card)
         return True
+
+    def __str__(self):
+        cards = [self.cards[-1]]
+        r = []
+
+        on_card = None
+        if self.trigger:
+            if cards:
+                on_card = cards[-1].highlight()
+                cards = cards[:-1]
+
+        if self.focus:
+            if self.mode:
+                cards = cards or [self.dummy]
+                cards += [EmptyCard().highlight()]
+            else:
+                if cards:
+                    cards[-1] = cards[-1].highlight()
+                else:
+                    cards = [EmptyCard().highlight()]
+
+        r.extend(print_cards(cards or [self.dummy]))
+        if on_card:
+            r.append(str(on_card))
+        return "\n".join(r)
 
 
 class BStack(Stack):
