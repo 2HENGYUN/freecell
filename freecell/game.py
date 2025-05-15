@@ -273,6 +273,7 @@ def print_to_screen(lines):
 
 
 def congrats():
+    time.sleep(0.5)
     an = CongratulationAnimation()
     for t in range(len(an.timeline)):
         lines = [
