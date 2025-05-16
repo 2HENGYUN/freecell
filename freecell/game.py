@@ -372,13 +372,26 @@ class Game:
         self.history = []
         self.state = 0
 
-        i = 0
-        for j in range(8):
-            k = i + j + 3
-            self.table.stacks[j].cards.extend(shuffled[i:k])
-            i = k
+        # deal animation
+        interval = 0.05
+        k = 0
 
         self.refresh()
+        time.sleep(interval)
+
+        for _ in range(2):
+            for i in range(8):
+                self.table.stacks[i].cards.append(shuffled[k])
+                k += 1
+            time.sleep(interval)
+            self.refresh()
+
+        for i in range(8):
+            for j in range(i, 8):
+                self.table.stacks[j].cards.append(shuffled[k])
+                k += 1
+            time.sleep(interval)
+            self.refresh()
 
     def __get_stacks(self):
         return self.table.stacks + self.header.A + self.header.B
