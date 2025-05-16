@@ -26,6 +26,11 @@ banner = f"""
                                                                                                  
                                                                                                  """
 
+conform_tip = """                               Do You Conform To Start A New Game?                               
+                                                                                                 
+                                                                                                 
+                                 [ Esc ]: No          [ n ]: Yes                                 """
+
 
 class EmptyCard(Card):
     def __init__(self, h=0):
@@ -285,6 +290,14 @@ def congrats():
         time.sleep(0.05)
 
 
+def conform_new_game():
+    print_to_screen([
+        *[" " * 97] * 13,
+        *[edge_col(line) for line in conform_tip.splitlines()],
+        *[" " * 97] * 18,
+    ])
+
+
 class Game:
     header: Header
     table: Table
@@ -292,7 +305,7 @@ class Game:
     pop_card: Card | None
     pop_index: int
     history: list[tuple[int, int]]
-    done: bool
+    state: int
 
     def __init__(self):
         self.__restart()
@@ -318,16 +331,23 @@ class Game:
         print_to_screen(str(self).splitlines())
         r = min([len(a.cards) for a in self.header.A])
         if r == 14:
-            self.done = True
+            self.state = 2
             congrats()
 
     def on(self, event):
-        if self.done:
+        if self.state == 2:
             if event == Commands.RESET:
                 self.__restart()
+        elif self.state == 1:
+            if event == Commands.RESET:
+                self.__restart()
+            elif event == Commands.ESC:
+                self.state = 0
+                self.refresh()
         else:
             if event == Commands.RESET:
-                self.__restart()
+                self.state = 1
+                conform_new_game()
             elif event == Commands.TAB:
                 self.__handle_tab()
             elif event == Commands.ESC:
@@ -350,7 +370,7 @@ class Game:
         self.pop_card = None
         self.pop_index = -1
         self.history = []
-        self.done = False
+        self.state = 0
 
         i = 0
         for j in range(8):
